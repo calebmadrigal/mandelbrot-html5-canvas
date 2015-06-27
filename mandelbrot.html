@@ -1,0 +1,157 @@
+<html><head>
+  <title>Mandlebrot Render</title>
+</head><body>
+
+<canvas id="canvas" width="700" height="700">
+  Your browser does not support HTML5 Canvas.
+</canvas>
+
+<script type="text/javascript">
+
+/////////////////////////////////////////////////////////////////////////// Complex number functions
+
+// Complex numbers represented as [real, imag]
+
+var complexMult = function(a, b) {
+  var realPart = a[0] * b[0] - a[1] * b[1];
+  var imagPart = a[0] * b[1] + a[1] * b[0];
+  return [realPart, imagPart];
+};
+
+var complexSquare = function (a) { return complexMult(a, a); };
+
+var complexAdd = function(a, b) { return [a[0] + b[0], a[1] + b[1]]; };
+
+/////////////////////////////////////////////////////////////////////////////// Other math functions
+
+// Example usage: floatRange(0, 1, 0.1) -> [0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1]
+var floatRange = function(start, end, precision) {
+  var range = [];
+  for (var i = Math.round(start/precision); i <= Math.round(end/precision); i++) {
+    range.push(i * precision);
+  }
+  return range;
+};
+
+// Returns a function maps from the inRange to the outRange
+var makeLinearMapper = function(inRange, outRange) {
+  var inDelta = inRange[1] - inRange[0];
+  var outDelta = outRange[1] - outRange[0];
+  // y = mx + b (m = slope, b = y-intersect)
+  var m = (outDelta / inDelta);
+  // To find b: b = y - mx
+  // Just plug in first item of each range
+  var b = outRange[0] - m * inRange[0];
+
+  var linearMapper = function(val) {
+    return Math.round(m * val + b);
+  }
+
+  return linearMapper;
+};
+
+///////////////////////////////////////////////////////////////////////////////////////// Mandelbrot
+
+// Parameters:
+// * n - a complex number in the format: [real, imag]
+// * maxIter - the max number of iterations that will be tried to see if mandelbrot(n) diverges,
+//   which we are defining as going outside the escapeRadius.
+// * escapeRadius - the distance from the origin which we are using as the indicator that the given
+//   point will continue to diverge.
+//
+// Returns [inMandelbrotSet, iterations], where:
+// * inMandelbrotSet is a boolean representing if n is in the mandelbrot set - i.e. it converges
+// * iteration
+var mandelbrot = function(c, maxIter, escapeRadius) {
+  var zPrev = c;
+  var zCurrent = c;
+  var inMandelbrotSet = true;
+
+  for (var iteration = 0; iteration < maxIter; iteration++) {
+    zPrev = zCurrent;
+    // Mandelbrot formula: Zn+1 = Zn**2 + c
+    zCurrent = complexAdd(complexSquare(zPrev), c);
+
+    // Determine if the absolute value of zCurrent is greater than escapeRadius. For efficiency,
+    // rather than taking the square root of real**2+imag**2, we'll square the escape radius,
+    // which cancels out the square root in the Pythagorean distance formula: sqrt(a**2+b**2)
+    if (zCurrent[0]*zCurrent[0]+zCurrent[1]+zCurrent[1] > escapeRadius*escapeRadius) {
+      // c diverges, so it's not in the mandelbrot set, and no more iterations are needed
+      inMandelbrotSet = false;
+      break;
+    }
+  }
+
+  return { 'inMandelbrot': inMandelbrotSet, 'iterations': iteration };
+};
+
+////////////////////////////////////////////////////////////////////////////////////// Display stuff
+
+var makeColorMapper = function(maxInput) {
+    var colorChannelRange = [0, 255];
+    var colorMapper = makeLinearMapper([0, maxInput], colorChannelRange);
+
+    var mapper = function(val) {
+        var colorVal = colorMapper(val);
+        var rgbVals = [colorVal, colorVal, 100];
+        return rgbVals;
+    };
+
+    return mapper;
+};
+
+var displayMandelbrot = function(rMin, rMax, iMin, iMax, precision, maxIter, escapeRad) {
+  var canvas = document.getElementById('canvas');
+  var context = canvas.getContext('2d');
+  var canvasWidth = context.canvas.width;
+  var canvasHeight = context.canvas.height;
+  var imageData = context.createImageData(canvasWidth, canvasHeight);
+  var pixelData = imageData.data;
+
+  var real_to_x_mapper = makeLinearMapper([rMin, rMax], [0, canvasWidth]);
+  var imag_to_y_mapper = makeLinearMapper([iMin, iMax], [0, canvasHeight]);
+  var colorMapper = makeColorMapper(maxIter);
+
+  floatRange(rMin, rMax, precision).forEach(function (realPart) {
+    floatRange(iMin, iMax, precision).forEach(function (imagPart) {
+      var complexNum = [realPart, imagPart];
+      var result = mandelbrot(complexNum, maxIter, escapeRad);
+      var inMandelbrot = result['inMandelbrot'];
+      var iterationsTaken = result['iterations'];
+      
+      var x = real_to_x_mapper(realPart);
+      var y = imag_to_y_mapper(imagPart);
+
+      var color = [0, 0, 0]; // black
+      if (!inMandelbrot) {
+        color = colorMapper(iterationsTaken);
+      }
+
+      // Set pixel color channels
+      var pixelOffset = (canvasWidth * y + x) * 4;
+      pixelData[pixelOffset] = color[0];     // red
+      pixelData[pixelOffset + 1] = color[1]; // green
+      pixelData[pixelOffset + 2] = color[2]; // blue
+      pixelData[pixelOffset + 3] = 255;      // alpha
+    });
+  });
+
+  context.putImageData(imageData, 0, 0);
+
+};
+
+///////////////////////////////////////////////////////////////////////////////////////// Parameters
+
+var realMin = -2.25;
+var realMax = 0.75;
+var imagMin = -1.5;
+var imagMax = 1.5;
+var precision = 0.002;
+var maxIterations = 100;
+var escapeRadius = 2;
+
+displayMandelbrot(realMin, realMax, imagMin, imagMax, precision, maxIterations, escapeRadius);
+
+</script>
+
+</body></html>
